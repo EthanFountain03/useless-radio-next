@@ -128,7 +128,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
                 const json = await res.json();
                 if (json.url) {
-                    window.location.href = json.url;
+                    // Stripe Checkout refuses to render inside an iframe — when the
+                    // store is embedded in the desktop Store window, break out to
+                    // the top-level page (same origin, so this is allowed).
+                    try {
+                        (window.top || window).location.href = json.url;
+                    } catch (err) {
+                        window.open(json.url, '_blank');
+                    }
                 } else {
                     throw new Error(json.message || 'Checkout failed');
                 }
