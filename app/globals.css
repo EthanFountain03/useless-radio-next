@@ -744,6 +744,11 @@ body:not(.mobile-device) {
     aspect-ratio: 16 / 9;
     min-height: 200px;
 }
+/* The player is a plain YouTube embed with native controls — the old
+   Win98 transport buttons can't drive it, so don't show them */
+#window-Videos .media-controls {
+    display: none;
+}
 
 /* Playlist Section */
 .playlist-section {

@@ -59,8 +59,9 @@ function setupMediaPlayerWindow(playerType) {
         // Pause the appropriate video player before closing
         if (playerType === 'video' && mainPlayer && mainPlayer.pauseVideo) {
             mainPlayer.pauseVideo();
-        } else if (playerType === 'Videos' && VideosPlayer && VideosPlayer.pauseVideo) {
-            VideosPlayer.pauseVideo();
+        } else if (playerType === 'Videos') {
+            // Plain iframe embed — re-render without autoplay to stop playback
+            showVideosEmbed(currentVideosIndex, false);
         }
         
         window.style.display = 'none';
@@ -1107,8 +1108,7 @@ let mediaPlayerStates = {
 
 // YouTube Players
 let mainPlayer = null;
-let VideosPlayer = null;
-let VideosPlayerReady = false;
+let VideosPlayer = null; // legacy — Videos window now uses a plain iframe (showVideosEmbed)
 let loungePlayer = null;
 let youTubeAPIReady = false;
 
@@ -1177,41 +1177,9 @@ function initializeYouTubePlayers() {
     }
 
 
-    // Initialize Videos player
-    if (document.getElementById('VideosVideoPlayer')) {
-        VideosPlayer = new YT.Player('VideosVideoPlayer', {
-            videoId: videosList[0]?.youtube_id || MAIN_VIDEO_ID,
-            playerVars: {
-                controls: 0,
-                modestbranding: 1,
-                rel: 0,
-                mute: 1 // Start muted
-            },
-            events: {
-                onReady: function(event) {
-                    event.target.mute(); // Ensure muted
-                    VideosPlayerReady = true;
-                    // Videos may have loaded from the DB before the player was ready —
-                    // cue the current one now so the display isn't a black box.
-                    const cur = videosList[currentVideosIndex] || videosList[0];
-                    if (cur?.youtube_id) event.target.cueVideoById(cur.youtube_id);
-                    updateMediaStatus('Videos', 'Ready (Muted)');
-                },
-                onStateChange: function(event) {
-                    const playPauseBtn = document.getElementById('VideosPlayPauseBtn');
-                    if (event.data === YT.PlayerState.PLAYING) {
-                        if (playPauseBtn) playPauseBtn.textContent = '⏸';
-                        mediaPlayerStates.Videos.playing = true;
-                        updateMediaStatus('Videos', mediaPlayerStates.Videos.muted ? 'Playing (Muted)' : 'Playing');
-                    } else if (event.data === YT.PlayerState.PAUSED) {
-                        if (playPauseBtn) playPauseBtn.textContent = '▶';
-                        mediaPlayerStates.Videos.playing = false;
-                        updateMediaStatus('Videos', 'Paused');
-                    }
-                }
-            }
-        });
-    }
+    // Videos window no longer uses the YT.Player API — it renders a plain iframe
+    // with native YouTube controls (see showVideosEmbed), which works even where
+    // the iframe_api script is blocked.
 
 }
 
@@ -1600,22 +1568,7 @@ function setupVideosPlayer() {
     if (videoselector) {
         videoselector.addEventListener('change', (e) => {
             const newIndex = parseInt(e.target.value);
-            const video = videosList[newIndex];
-            currentVideosIndex = newIndex;
-            if (VideosPlayer && video?.youtube_id) {
-                VideosPlayer.loadVideoById(video.youtube_id);
-                const nowPlaying = document.getElementById('VideosNowPlaying');
-                if (nowPlaying) {
-                    nowPlaying.textContent = `Now Playing: ${video.title}`;
-                }
-                updatePlaylistDisplay();
-                const playPauseBtn = document.getElementById('VideosPlayPauseBtn');
-                if (playPauseBtn) {
-                    playPauseBtn.textContent = '⏸';
-                    mediaPlayerStates.Videos.playing = true;
-                    updateMediaStatus('Videos', mediaPlayerStates.Videos.muted ? 'Playing (Muted)' : 'Playing');
-                }
-            }
+            if (!isNaN(newIndex) && videosList[newIndex]) switchToVideos(newIndex);
         });
     }
 
@@ -1694,15 +1647,33 @@ function setupVideosPlayer() {
         });
     }
 }
+// Render the Videos display as a plain YouTube iframe with native controls.
+// The YT.Player API (iframe_api script) is blocked by some browsers/extensions,
+// which left this window as a dead black box — a direct embed always works.
+function showVideosEmbed(index, autoplay) {
+    const holder = document.getElementById('VideosVideoPlayer');
+    const video = videosList[index];
+    if (!holder) return;
+    if (!video?.youtube_id) {
+        holder.innerHTML = '';
+        return;
+    }
+    const params = `rel=0&modestbranding=1&playsinline=1${autoplay ? '&autoplay=1' : ''}`;
+    holder.innerHTML =
+        `<iframe src="https://www.youtube.com/embed/${video.youtube_id}?${params}"` +
+        ` style="width:100%;height:100%;border:none;" allowfullscreen` +
+        ` allow="autoplay; encrypted-media; picture-in-picture"></iframe>`;
+}
+
 function switchToVideos(index) {
     const video = videosList[index];
-    if (!VideosPlayer || !video?.youtube_id) {
+    if (!video?.youtube_id) {
         console.error('Cannot switch to Videos:', index);
         return;
     }
 
     currentVideosIndex = index;
-    VideosPlayer.loadVideoById(video.youtube_id);
+    showVideosEmbed(index, true);
 
     const videoselector = document.getElementById('videoselector');
     if (videoselector) videoselector.value = index.toString();
@@ -1711,13 +1682,7 @@ function switchToVideos(index) {
     if (nowPlaying) nowPlaying.textContent = `Now Playing: ${video.title}`;
 
     updatePlaylistDisplay();
-
-    const playPauseBtn = document.getElementById('VideosPlayPauseBtn');
-    if (playPauseBtn) {
-        playPauseBtn.textContent = '⏸';
-        mediaPlayerStates.Videos.playing = true;
-        updateMediaStatus('Videos', mediaPlayerStates.Videos.muted ? 'Playing (Muted)' : 'Playing');
-    }
+    updateMediaStatus('Videos', 'Playing');
 }
 
 function updatePlaylistDisplay() {
@@ -1820,11 +1785,11 @@ function refreshVideosUI() {
         nowPlaying.textContent = videosList[0] ? `Now Playing: ${videosList[0].title}` : 'Now Playing: —';
     }
 
-    if (VideosPlayer && VideosPlayerReady && videosList[0]?.youtube_id) {
-        VideosPlayer.cueVideoById(videosList[0].youtube_id);
-    }
+    showVideosEmbed(0, false);
 
     updatePlaylistDisplay();
+    // The admin list may have rendered before the videos finished loading
+    updateVideoAdminPanel();
 }
 
 // Show/hide the admin panel based on role, and render the list
