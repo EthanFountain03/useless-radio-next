@@ -89,6 +89,17 @@ export default function UselessRadioApp() {
             </div>
             <div className="icon-label">About</div>
           </div>
+          {/* Admin-only — shown by Auth._updateUI when role === 'admin' */}
+          <div className="icon" data-app="Control Panel" id="adminControlPanelIcon" style={{ display: 'none' }}>
+            <div className="icon-image">
+              <img
+                src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23c0c0c0'/%3E%3Crect x='6' y='10' width='52' height='44' rx='2' fill='%23808080'/%3E%3Crect x='7' y='11' width='50' height='42' fill='%23dfdfdf'/%3E%3Crect x='7' y='11' width='50' height='8' fill='%23000080'/%3E%3Ccircle cx='12' cy='15' r='2' fill='%23c0c0c0'/%3E%3Crect x='12' y='26' width='18' height='4' rx='2' fill='%23808080'/%3E%3Ccircle cx='26' cy='28' r='4' fill='%23000080'/%3E%3Crect x='12' y='36' width='18' height='4' rx='2' fill='%23808080'/%3E%3Ccircle cx='16' cy='38' r='4' fill='%23000080'/%3E%3Crect x='12' y='46' width='18' height='4' rx='2' fill='%23808080'/%3E%3Ccircle cx='22' cy='48' r='4' fill='%23000080'/%3E%3Cpath d='M46 24l2.2 4.4 4.8.7-3.5 3.4.8 4.8-4.3-2.3-4.3 2.3.8-4.8-3.5-3.4 4.8-.7z' fill='%23ffcc00' stroke='%23806000' stroke-width='1'/%3E%3Ccircle cx='46' cy='44' r='6' fill='none' stroke='%23000080' stroke-width='3'/%3E%3Crect x='44.5' y='48' width='3' height='7' rx='1' fill='%23000080' transform='rotate(-45 46 51)'/%3E%3C/svg%3E"
+                alt="Control Panel"
+                className="icon-img"
+              />
+            </div>
+            <div className="icon-label">Control Panel</div>
+          </div>
         </div>
 
         {/* Mannivirus pixels */}

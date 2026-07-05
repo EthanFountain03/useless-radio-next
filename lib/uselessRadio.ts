@@ -102,6 +102,13 @@ function openWindow(appName) {
         return;
     }
 
+    // Admin Control Panel icon opens the tools modal on the Drop tab
+    if (appName === 'Control Panel') {
+        ProfileModal.activeTab = 'drop';
+        ProfileModal.open();
+        return;
+    }
+
     // Mobile Safari (website): fall through to embedded Windows98 window below (full-screen sizing).
 
     // Capture before the local 'let window = ...' shadows the global window object.
@@ -634,6 +641,13 @@ function createWindow(appName) {
                     <div style="width: 1px; height: 24px; background: #808080; margin: 0 4px;"></div>
                     <button class="camera-tool-btn" onclick="cameraRoll.clearDrawing()" title="Clear Drawing">🗑️</button>
                     <button class="camera-tool-btn" onclick="cameraRoll.saveImage()" title="Save Image">💾</button>
+                    <div id="cameraAdminControls" style="display:none;align-items:center;gap:4px;">
+                        <div style="width: 1px; height: 24px; background: #808080; margin: 0 4px;"></div>
+                        <label for="cameraUploadInput" class="camera-tool-btn" style="cursor:pointer;" title="Add photos (admin)">➕ Add Photos</label>
+                        <input type="file" id="cameraUploadInput" accept="image/*" multiple style="display:none;">
+                        <button class="camera-tool-btn" onclick="cameraRoll.deleteCurrentPhoto()" title="Remove this photo (admin)">❌ Remove</button>
+                        <span id="cameraAdminStatus" style="font-size:10px;padding:0 4px;"></span>
+                    </div>
                 </div>
                 <div class="camera-view" style="position: relative; width: 100%; height: calc(100% - 40px); overflow: auto; background: #808080;">
                     <canvas id="cameraCanvas" style="display: block; margin: auto; cursor: crosshair; max-width: 100%; max-height: 100%;"></canvas>
@@ -1006,7 +1020,11 @@ let currentTracksPlatform = 'spotify';
 
 const MAIN_VIDEO_ID = '7VxjjCIMK3w';
 
-// Camera Roll Photos - Add your image paths here
+// Camera Roll photos — loaded from Supabase `photos` table; falls back to CAMERA_ROLL_PHOTOS.
+// Each entry: { id, image_url, storage_path, sort_order }
+let photosList = [];
+
+// Camera Roll Photos - fallback only (photos now live in the Supabase `photos` table)
 const CAMERA_ROLL_PHOTOS = [
     'Lookbook/Lookbook39.JPEG',
     'Lookbook/WhiteTee2.png',
@@ -1340,6 +1358,7 @@ function initializeDesktop() {
     setupVideoAdminControls();
     loadVideosFromDB();
     loadTracksFromDB();
+    loadPhotosFromDB();
     applyTaskbarIconSizes();
     // Apply site settings once loaded — use the data already fetched at DOMContentLoaded
     // if it's ready; otherwise wait for the fetch to complete.
@@ -1354,6 +1373,7 @@ function initializeDesktop() {
     } else {
         SiteSettings.load().then(_applySettings);
     }
+
 }
 
 // Apply custom sizes to taskbar icons
@@ -1375,7 +1395,9 @@ function applyTaskbarIconSizes() {
 function setupMediaPlayers() {
     setupMainVideoPlayer();
     setupVideosPlayer();
-    setupLoungeVideoPlayer();
+    // Lounge player is created in initializeYouTubePlayers() once the YT API loads —
+    // a stale setupLoungeVideoPlayer() call here crashed initializeDesktop on every
+    // page load, which silently blocked videos/tracks/photos/popups from loading.
 }
 
 function setupMainVideoPlayer() {
@@ -1738,6 +1760,23 @@ async function loadVideosFromDB() {
     videosList = data || [];
     currentVideosIndex = 0;
     refreshVideosUI();
+}
+
+// Load Camera Roll photos from Supabase; fall back to the hardcoded list
+async function loadPhotosFromDB() {
+    const fallback = () => CAMERA_ROLL_PHOTOS.map((p, i) => ({
+        id: null, image_url: p.startsWith('/') ? p : '/' + p, storage_path: '', sort_order: i
+    }));
+    try {
+        const { data, error } = await supabaseClient
+            .from('photos')
+            .select('*')
+            .order('sort_order', { ascending: true });
+        photosList = (!error && data && data.length > 0) ? data : fallback();
+    } catch (e) {
+        photosList = fallback();
+    }
+    return photosList;
 }
 
 // Rebuild the dropdown and reset the player to the first video
@@ -2645,30 +2684,84 @@ const cameraRoll = {
     },
     
     loadPhoto(index) {
-        if (index < 0 || index >= CAMERA_ROLL_PHOTOS.length) return;
+        if (index < 0 || index >= photosList.length) return;
         this.currentIndex = index;
-        
+
         const img = new Image();
+        img.crossOrigin = 'anonymous';
         img.onload = () => {
             this.canvas.width = img.width;
             this.canvas.height = img.height;
             this.ctx.drawImage(img, 0, 0);
-            
+
             this.tempCanvas.width = img.width;
             this.tempCanvas.height = img.height;
         };
-        img.src = CAMERA_ROLL_PHOTOS[index];
-        
+        img.src = photosList[index].image_url;
+
         const counter = document.getElementById('photoCounter');
-        if (counter) counter.textContent = `${index + 1} / ${CAMERA_ROLL_PHOTOS.length}`;
+        if (counter) counter.textContent = `${index + 1} / ${photosList.length}`;
     },
-    
+
     prevPhoto() {
         if (this.currentIndex > 0) this.loadPhoto(this.currentIndex - 1);
     },
-    
+
     nextPhoto() {
-        if (this.currentIndex < CAMERA_ROLL_PHOTOS.length - 1) this.loadPhoto(this.currentIndex + 1);
+        if (this.currentIndex < photosList.length - 1) this.loadPhoto(this.currentIndex + 1);
+    },
+
+    _setStatus(msg, isError) {
+        const el = document.getElementById('cameraAdminStatus');
+        if (!el) return;
+        el.textContent = msg;
+        el.style.color = isError ? '#cc0000' : '#006600';
+        if (!isError && msg) setTimeout(() => { el.textContent = ''; }, 4000);
+    },
+
+    async uploadPhotos(fileList) {
+        const files = Array.from(fileList || []).filter(f => f.type.startsWith('image/'));
+        if (files.length === 0) return;
+        const startCount = photosList.length;
+        let nextOrder = photosList.length > 0
+            ? Math.max(...photosList.map(p => p.sort_order || 0)) + 1
+            : 1;
+        let done = 0;
+        for (const file of files) {
+            this._setStatus(`Uploading ${done + 1} / ${files.length}...`);
+            const ext  = file.name.split('.').pop().toLowerCase();
+            const path = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+            const { error: uploadErr } = await supabaseClient.storage
+                .from('lookbook')
+                .upload(path, file, { upsert: false, contentType: file.type });
+            if (uploadErr) { this._setStatus('Upload failed: ' + uploadErr.message, true); return; }
+            const { data: urlData } = supabaseClient.storage.from('lookbook').getPublicUrl(path);
+            const { error: insertErr } = await supabaseClient.from('photos').insert({
+                image_url: urlData.publicUrl,
+                storage_path: path,
+                sort_order: nextOrder++
+            });
+            if (insertErr) { this._setStatus('Save failed: ' + insertErr.message, true); return; }
+            done++;
+        }
+        await loadPhotosFromDB();
+        this.loadPhoto(startCount); // jump to the first newly added photo
+        this._setStatus(`Added ${done} photo${done === 1 ? '' : 's'}!`);
+    },
+
+    async deleteCurrentPhoto() {
+        const photo = photosList[this.currentIndex];
+        if (!photo) return;
+        if (!photo.id) { this._setStatus('Photos are offline right now — try again later.', true); return; }
+        if (!confirm('Remove this photo from the Camera Roll?')) return;
+        const { error } = await supabaseClient.from('photos').delete().eq('id', photo.id);
+        if (error) { this._setStatus('Delete failed: ' + error.message, true); return; }
+        if (photo.storage_path) {
+            await supabaseClient.storage.from('lookbook').remove([photo.storage_path]).catch(() => {});
+        }
+        await loadPhotosFromDB();
+        this.loadPhoto(Math.min(this.currentIndex, photosList.length - 1));
+        this._setStatus('Photo removed.');
     },
     
     setTool(tool) {
@@ -2764,7 +2857,35 @@ const cameraRoll = {
 };
 
 function initCameraRoll() {
-    cameraRoll.init();
+    const boot = () => {
+        cameraRoll.init();
+        updateCameraRollAdminUI();
+    };
+    if (photosList.length === 0) {
+        loadPhotosFromDB().then(boot);
+    } else {
+        boot();
+        // Refresh in the background in case another admin added photos
+        loadPhotosFromDB().then(() => {
+            const counter = document.getElementById('photoCounter');
+            if (counter) counter.textContent = `${cameraRoll.currentIndex + 1} / ${photosList.length}`;
+        });
+    }
+}
+
+// Show/hide the Camera Roll admin controls based on role
+function updateCameraRollAdminUI() {
+    const controls = document.getElementById('cameraAdminControls');
+    if (!controls) return;
+    const isAdmin = Auth.currentProfile?.role === 'admin';
+    controls.style.display = isAdmin ? 'flex' : 'none';
+    if (isAdmin && !controls.dataset.bound) {
+        controls.dataset.bound = '1';
+        document.getElementById('cameraUploadInput')?.addEventListener('change', (e) => {
+            cameraRoll.uploadPhotos(e.target.files);
+            e.target.value = '';
+        });
+    }
 }
 
 window.cameraRoll = cameraRoll;
@@ -3406,6 +3527,11 @@ const Auth = {
         // Show/hide video admin panel based on role
         if (typeof updateVideoAdminPanel === 'function') updateVideoAdminPanel();
         if (typeof updateTracksAdminPanel === 'function') updateTracksAdminPanel();
+        if (typeof updateCameraRollAdminUI === 'function') updateCameraRollAdminUI();
+
+        // Admin-only Control Panel desktop icon
+        const cpIcon = document.getElementById('adminControlPanelIcon');
+        if (cpIcon) cpIcon.style.display = (this.currentProfile?.role === 'admin') ? '' : 'none';
     },
 
     _closeStartMenu() {
@@ -3515,11 +3641,14 @@ const ProfileModal = {
             });
 
         } else if (isMemberOrAdmin) {
+            const isAdmin = role === 'admin';
+            if (this.activeTab === 'drop' && !isAdmin) this.activeTab = 'profile';
             this.modal?.querySelector('.auth-modal')?.classList.add('tools-modal');
             body.style.padding = '0';
             body.innerHTML = `
                 <div class="tools-tabs">
                     <button class="tools-tab${this.activeTab === 'profile' ? ' active' : ''}" data-tab="profile">👤 Profile</button>
+                    ${isAdmin ? `<button class="tools-tab${this.activeTab === 'drop' ? ' active' : ''}" data-tab="drop">🚀 Drop</button>` : ''}
                     <button class="tools-tab${this.activeTab === 'popups'  ? ' active' : ''}" data-tab="popups">📢 Popups</button>
                     <button class="tools-tab${this.activeTab === 'videos'  ? ' active' : ''}" data-tab="videos">🎬 Videos</button>
                     <button class="tools-tab${this.activeTab === 'results' ? ' active' : ''}" data-tab="results">📋 Results</button>
@@ -3858,6 +3987,7 @@ const ToolsPanel = {
         if (!body) return;
         const tab = ProfileModal.activeTab;
         if      (tab === 'popups')  body.innerHTML = this._popupsHTML();
+        else if (tab === 'drop')    body.innerHTML = this._dropHTML();
         else if (tab === 'videos')  body.innerHTML = this._videosHTML();
         else if (tab === 'profile') body.innerHTML = this._profileHTML();
         else if (tab === 'results') { body.innerHTML = this._resultsHTML(); this._loadResults(); }
@@ -3964,6 +4094,162 @@ const ToolsPanel = {
             </div>`;
     },
 
+    _dropHTML() {
+        return `
+            <div class="tools-panel-section">
+                <p style="font-size:10px;color:#666;margin-bottom:10px;">
+                    One form, one button. This adds the album to Tracks, shows the New Drop popup,
+                    updates the countdown, adds the video, and notifies app users — all at once.
+                </p>
+                <div class="popup-config-row" style="display:block;">
+                    <label class="popup-label">💿 Album / Single Title *</label>
+                    <input class="tools-field" id="dd_title" placeholder="e.g. Die Good Vol.3" maxlength="80">
+                </div>
+                <div class="popup-config-row" style="display:block;margin-top:8px;">
+                    <label class="popup-label">Cover Art * (direct upload)</label>
+                    <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+                        <img id="dd_cover_preview" style="width:56px;height:56px;object-fit:cover;border:2px inset #c0c0c0;flex-shrink:0;display:none;">
+                        <div id="dd_cover_empty" style="width:56px;height:56px;border:2px inset #c0c0c0;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;">💿</div>
+                        <div>
+                            <label for="dd_cover_file" class="auth-btn auth-file-label">Browse...</label>
+                            <input type="file" id="dd_cover_file" accept="image/*" style="display:none;">
+                        </div>
+                    </div>
+                </div>
+                <div class="popup-config-row" style="display:block;margin-top:8px;">
+                    <label class="popup-label">Streaming Links</label>
+                    <input class="tools-field" id="dd_spotify" placeholder="Spotify URL (optional)">
+                    <input class="tools-field" id="dd_apple" placeholder="Apple Music / DistroKid URL (optional)" style="margin-top:4px;">
+                    <input class="tools-field" id="dd_soundcloud" placeholder="SoundCloud URL (optional)" style="margin-top:4px;">
+                </div>
+                <div class="popup-config-row" style="display:block;margin-top:8px;">
+                    <label class="popup-label">Popup Message</label>
+                    <textarea class="tools-field" id="dd_message" rows="2" placeholder="Out now everywhere.">Out now everywhere.</textarea>
+                </div>
+                <div class="popup-config-row" style="display:block;margin-top:8px;">
+                    <label class="popup-label">🎬 Music Video (optional)</label>
+                    <input class="tools-field" id="dd_video" placeholder="YouTube URL or ID — added to the Videos player">
+                </div>
+                <div class="popup-config-row" style="display:block;margin-top:8px;">
+                    <label class="popup-label">📅 Next Drop Countdown (optional)</label>
+                    <div style="font-size:10px;color:#555;margin-bottom:3px;">When's the drop after this one? Leave blank to show TBA.</div>
+                    <input class="tools-field" type="datetime-local" id="dd_next_date" style="width:auto;">
+                </div>
+                <div style="display:flex;gap:14px;margin-top:10px;flex-wrap:wrap;">
+                    <label style="display:flex;align-items:center;gap:5px;font-size:10px;cursor:pointer;">
+                        <input type="checkbox" id="dd_show_popup" checked> Show drop popup to visitors
+                    </label>
+                    <label style="display:flex;align-items:center;gap:5px;font-size:10px;cursor:pointer;">
+                        <input type="checkbox" id="dd_notify" checked> Notify app users
+                    </label>
+                </div>
+            </div>
+            <div class="tools-save-bar">
+                <span class="tools-status" id="dropStatus"></span>
+                <button class="auth-btn auth-btn-primary" id="dropItBtn">🚀 Drop It</button>
+            </div>`;
+    },
+
+    async _saveDrop() {
+        const g = (id) => document.getElementById(id);
+        const v = (id) => g(id)?.value?.trim() || '';
+        const statusEl = g('dropStatus');
+        const btn = g('dropItBtn');
+        const setStatus = (msg, isError) => {
+            if (statusEl) { statusEl.textContent = msg; statusEl.className = 'tools-status' + (isError ? ' error' : ''); }
+        };
+
+        const title     = v('dd_title');
+        const coverFile = g('dd_cover_file')?.files?.[0];
+        if (!title)     { setStatus('Album title is required.', true); return; }
+        if (!coverFile) { setStatus('Cover art is required — hit Browse.', true); return; }
+
+        const spotify    = v('dd_spotify');
+        const apple      = v('dd_apple');
+        const soundcloud = v('dd_soundcloud');
+        const message    = v('dd_message') || 'Out now everywhere.';
+        const rawVideo   = v('dd_video');
+        const videoId    = rawVideo ? this._extractVideoId(rawVideo) : '';
+        if (rawVideo && !videoId) { setStatus('That YouTube link doesn\'t look right.', true); return; }
+
+        if (btn) btn.disabled = true;
+        try {
+            // 1. Upload cover (direct upload only — same bucket the Tracks form uses)
+            setStatus('Uploading cover...');
+            const ext  = coverFile.name.split('.').pop().toLowerCase();
+            const path = `tracks/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+            const { error: upErr } = await supabaseClient.storage
+                .from('popup-assets')
+                .upload(path, coverFile, { upsert: true, contentType: coverFile.type });
+            if (upErr) throw new Error('Cover upload failed: ' + upErr.message);
+            const coverUrl = supabaseClient.storage.from('popup-assets').getPublicUrl(path).data.publicUrl;
+
+            // 2. Add to Tracks
+            setStatus('Adding to Tracks...');
+            const nextTrackOrder = tracksList.length > 0
+                ? Math.max(...tracksList.map(t => t.sort_order || 0)) + 1 : 1;
+            const { error: trackErr } = await supabaseClient.from('tracks').insert({
+                title, image_url: coverUrl,
+                spotify_url: spotify, apple_music_url: apple, soundcloud_url: soundcloud,
+                sort_order: nextTrackOrder
+            });
+            if (trackErr) throw new Error('Track save failed: ' + trackErr.message);
+
+            // 3. Add the music video to the Videos player
+            if (videoId) {
+                setStatus('Adding video...');
+                const nextVidOrder = videosList.length > 0
+                    ? Math.max(...videosList.map(x => x.sort_order || 0)) + 1 : 1;
+                const { error: vidErr } = await supabaseClient.from('videos').insert({
+                    title: `${title} (Official Video)`, youtube_id: videoId, sort_order: nextVidOrder
+                });
+                if (vidErr) throw new Error('Video save failed: ' + vidErr.message);
+            }
+
+            // 4. Popup + countdown in one settings write
+            setStatus('Updating popup & countdown...');
+            const nextDateRaw = g('dd_next_date')?.value || '';
+            const settingsErr = await SiteSettings.save({
+                popup_album_active: !!g('dd_show_popup')?.checked,
+                popup_album_title: title,
+                popup_album_text: message,
+                popup_album_photo_url: coverUrl,
+                popup_album_photo_link: '',
+                popup_album_spotify_url: spotify,
+                popup_album_soundcloud_url: soundcloud,
+                popup_album_link_active: !!apple,
+                popup_album_url: apple,
+                drop_date: nextDateRaw ? new Date(nextDateRaw).toISOString() : ''
+            });
+            if (settingsErr) throw new Error('Settings save failed: ' + settingsErr.message);
+
+            // 5. Refresh everything on this page so the admin sees it live
+            document.getElementById('sitePopup_album')?.remove();
+            SiteSettings.applyToPage();
+            await Promise.all([loadTracksFromDB(), loadVideosFromDB()]);
+
+            // 6. One push notification for the whole drop
+            if (g('dd_notify')?.checked) {
+                setStatus('Dropped! Notifying...');
+                const nr = await sendPushNotification(`${title} — OUT NOW`, 'New drop on Useless Radio. Go listen.');
+                setStatus(nr.error ? `Dropped! (notify failed: ${nr.error})` : `Dropped! Sent to ${nr.sent} device(s) 🚀`);
+            } else {
+                setStatus('Dropped! 🚀');
+            }
+            // Reset the form but keep the modal open so they can see the status
+            ['dd_title','dd_spotify','dd_apple','dd_soundcloud','dd_video','dd_next_date'].forEach(id => { if (g(id)) g(id).value = ''; });
+            if (g(('dd_message'))) g('dd_message').value = 'Out now everywhere.';
+            if (g('dd_cover_file')) g('dd_cover_file').value = '';
+            const prev = g('dd_cover_preview'), empty = g('dd_cover_empty');
+            if (prev)  prev.style.display = 'none';
+            if (empty) empty.style.display = 'flex';
+        } catch (e) {
+            setStatus(e.message, true);
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    },
+
     _videosHTML() {
         return `
             <div class="tools-panel-section">
@@ -4048,6 +4334,15 @@ const ToolsPanel = {
     },
 
     _bindHandlers() {
+        document.getElementById('dropItBtn')?.addEventListener('click', () => this._saveDrop());
+        document.getElementById('dd_cover_file')?.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const preview = document.getElementById('dd_cover_preview');
+            const empty   = document.getElementById('dd_cover_empty');
+            if (preview) { preview.src = URL.createObjectURL(file); preview.style.display = 'block'; }
+            if (empty)   empty.style.display = 'none';
+        });
         document.getElementById('savePopupsBtn')?.addEventListener('click', () => this._savePopups());
         document.getElementById('saveVideosBtn')?.addEventListener('click', () => this._saveVideos());
         document.getElementById('sendNotifBtn')?.addEventListener('click', () => this._sendNotif());
