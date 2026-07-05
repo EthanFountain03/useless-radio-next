@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Useless Radio</title>
+  <link rel="stylesheet" href="/store/style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono&display=swap" rel="stylesheet" />
+  <!-- PayPal SDK loaded lazily on first cart open — loading here crashes mobile WebKit -->
+</head>
+<body class="loading">
+
+  <div id="loading-screen">
+    <img id="loading-logo" src="/store/z.[useless radio] beaver logo.png" alt="Loading..." />
+  </div>
+  <div id="page-cover"></div>
+
+  <div id="top-bar">
+    <h1>USELESS RADIO</h1>
+    <div id="header-cart">
+      <img src="/store/z.Doc File Windows 98.png" alt="Cart" />
+      <div id="cart-count">0</div>
+    </div>
+  </div>
+
+  <div class="gallery">
+    <img class="shirt top-center" data-src="/store/z.DESIGN13.webp" alt="Shirt 9" />
+    <img class="shirt center-1" data-src="/store/z.DESIGN3 (1)-1.webp" alt="Shirt 1" />
+    <img class="shirt center-2" data-src="/store/z.DESIGN4 (1).webp" alt="Shirt 2" />
+    <img class="shirt left-1" data-src="/store/z.DESIGN5 (1)-1.webp" alt="Shirt 3" />
+    <img class="shirt left-2" data-src="/store/z.DESIGN6 (1)-2.webp" alt="Shirt 4" />
+    <img class="shirt left-3" data-src="/store/z.DESIGN8 (1)-1.webp" alt="Shirt 5" />
+    <img class="shirt right-1" data-src="/store/z.DESIGN10 (1).webp" alt="Shirt 6" />
+    <img class="shirt right-2" data-src="/store/z.DESIGN11 (1)-1.webp" alt="Shirt 7" />
+    <img class="shirt right-3" data-src="/store/z.DESIGN12 (1)-1.webp" alt="Shirt 8" />
+    <img class="shirt bottom-center" data-src="/store/z.DESIGN14.webp" alt="Shirt 10" />
+
+    <!-- Bottom images (Left and Right) -->
+  </div>
+
+  <!-- Modal for full-size image -->
+  <div id="image-modal" style="display: none;">
+    <div id="modal-content">
+      <span id="close-modal">&times;</span>
+      
+      <div id="modal-left">
+        <img id="modal-image" src="" alt="Full-size shirt" />
+      </div>
+      
+      <div id="modal-right">
+        <h2 id="modal-title">Shirt Title</h2>
+        <p id="modal-description">Description of the shirt.</p>
+        <p><strong>Price: $<span id="modal-price">0.00</span></strong></p>
+        
+        <label for="shirt-size">Size:</label>
+        <select id="shirt-size">
+          <option value="S">Small</option>
+          <option value="M" selected>Medium</option>
+          <option value="L">Large</option>
+          <option value="XL">XL</option>
+          <option value="2XL">2XL</option>
+        </select>
+        
+        <label for="shirt-quantity">Quantity:</label>
+        <input type="number" id="shirt-quantity" min="1" value="1" />
+        
+        <button id="add-to-cart">Add to Cart</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="cart-container" style="display: none;">
+    <h2>Your Cart</h2>
+    <div id="cart-items"></div>
+    <div id="paypal-button-container"></div>
+  </div>
+  <div class="bottom-images">
+    <a href="https://soundcloud.com/uselessradio/sets/die-good-vol-1" target="_blank">
+    <img src="/store/z.DIE GOOD ALBUM COVER.png" alt="Left" class="bottom-icon" />
+    </a>
+    <img src="/store/z.TV-MA_icon.png" alt="Right" class="bottom-icon" />
+  </div>
+
+  <footer>
+    <p>&copy; 2025 [useless radio] Production Co. All rights reserved. NO part of this poster may be produced without permission. For information address 285 Andrew Young International Blvd NW, Atlanta, GA 30313</p>
+  </footer>
+
+  <script src="/store/script.js"></script>
+</body>
+</html>
+
+
+

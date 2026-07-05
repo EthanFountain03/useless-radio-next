@@ -153,6 +153,16 @@ function openWindow(appName) {
                     window.style.height = '650px';
                     window.style.left = Math.max(20, (vw - 850) / 2) + 'px';
                     window.style.top = Math.max(20, (vh - 650) / 4) + 'px';
+                } else if (appName === 'Videos') {
+                    // Videos: sized to fit the viewport, centered — content scrolls inside
+                    const vw = document.documentElement.clientWidth;
+                    const vh = document.documentElement.clientHeight;
+                    const w  = Math.min(760, vw - 40);
+                    const h  = Math.min(700, vh - 80);
+                    window.style.width  = w + 'px';
+                    window.style.height = h + 'px';
+                    window.style.left   = Math.max(20, (vw - w) / 2) + 'px';
+                    window.style.top    = Math.max(10, (vh - h) / 2 - 20) + 'px';
                 } else {
                     // Other windows use regular random sizing
                     randomWidth = Math.floor(Math.random() * 400) + 400; // 400-800px
@@ -964,7 +974,7 @@ const WEBSITE_URLS = {
         'https://www.youtube.com/embed/dqHhRDJyIjc',
         'https://www.youtube.com/watch?v=g0qgA97NegU'
     ],
-    'store': 'https://uselessradio.com/store/',
+    'store': '/store/',  // served from public/store/ — checkout hits /api/store-checkout
     'lounge': null,
     'tracks': null,
     // Personal icons
@@ -1098,6 +1108,7 @@ let mediaPlayerStates = {
 // YouTube Players
 let mainPlayer = null;
 let VideosPlayer = null;
+let VideosPlayerReady = false;
 let loungePlayer = null;
 let youTubeAPIReady = false;
 
@@ -1179,6 +1190,11 @@ function initializeYouTubePlayers() {
             events: {
                 onReady: function(event) {
                     event.target.mute(); // Ensure muted
+                    VideosPlayerReady = true;
+                    // Videos may have loaded from the DB before the player was ready —
+                    // cue the current one now so the display isn't a black box.
+                    const cur = videosList[currentVideosIndex] || videosList[0];
+                    if (cur?.youtube_id) event.target.cueVideoById(cur.youtube_id);
                     updateMediaStatus('Videos', 'Ready (Muted)');
                 },
                 onStateChange: function(event) {
@@ -1804,7 +1820,7 @@ function refreshVideosUI() {
         nowPlaying.textContent = videosList[0] ? `Now Playing: ${videosList[0].title}` : 'Now Playing: —';
     }
 
-    if (VideosPlayer && videosList[0]?.youtube_id) {
+    if (VideosPlayer && VideosPlayerReady && videosList[0]?.youtube_id) {
         VideosPlayer.cueVideoById(videosList[0].youtube_id);
     }
 

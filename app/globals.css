@@ -734,6 +734,17 @@ body:not(.mobile-device) {
     overflow: hidden;
 }
 
+/* Videos window: keep the player 16:9 and let everything else scroll,
+   so the playlist + admin panel are always reachable */
+#window-Videos .media-player-content {
+    overflow-y: auto;
+}
+#window-Videos .video-display {
+    flex: 0 0 auto;
+    aspect-ratio: 16 / 9;
+    min-height: 200px;
+}
+
 /* Playlist Section */
 .playlist-section {
     background: #e0e0e0;
