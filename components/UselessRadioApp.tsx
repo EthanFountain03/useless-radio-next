@@ -91,13 +91,7 @@ export default function UselessRadioApp() {
           </div>
           {/* Admin-only — shown by Auth._updateUI when role === 'admin' */}
           <div className="icon" data-app="Control Panel" id="adminControlPanelIcon" style={{ display: 'none' }}>
-            <div className="icon-image">
-              <img
-                src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cg fill='%23808080' stroke='%23404040' stroke-width='2'%3E%3Crect x='27' y='6' width='10' height='52'/%3E%3Crect x='6' y='27' width='52' height='10'/%3E%3Crect x='27' y='6' width='10' height='52' transform='rotate(45 32 32)'/%3E%3Crect x='27' y='6' width='10' height='52' transform='rotate(-45 32 32)'/%3E%3Ccircle cx='32' cy='32' r='17'/%3E%3C/g%3E%3Ccircle cx='32' cy='32' r='15' fill='%23dfdfdf'/%3E%3Ccircle cx='32' cy='32' r='13' fill='%23808080'/%3E%3Ccircle cx='32' cy='32' r='7' fill='%23c0c0c0' stroke='%23404040' stroke-width='2'/%3E%3C/svg%3E"
-                alt="Control Panel"
-                className="icon-img"
-              />
-            </div>
+            <div className="icon-image">⚙️</div>
             <div className="icon-label">Control Panel</div>
           </div>
         </div>
