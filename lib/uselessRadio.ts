@@ -2028,17 +2028,25 @@ function renderTracksGrid() {
             const hasLink = !!url;
             const imgSrc  = item.image_url || item.image || PLACEHOLDER_IMG;
 
+            // Edit/delete controls for admins — only for real DB rows (fallback items have no id)
+            const adminBtns = (isAdmin && item.id) ? `
+                <div style="display:flex;gap:4px;justify-content:center;margin-top:4px;">
+                    <button class="video-admin-sm-btn" onclick="event.stopPropagation();tracksAdminEditOpen('${item.id}')" title="Edit album">✎ Edit</button>
+                    <button class="video-admin-sm-btn danger" onclick="event.stopPropagation();tracksAdminDelete('${item.id}')" title="Remove album">✕</button>
+                </div>` : '';
+
             itemsHTML += `
                 <div class="track-item"
                      style="cursor:${hasLink ? 'pointer' : 'default'};"
                      ${hasLink ? `onclick="window.open('${url}','_blank')"` : ''}
-                     title="${hasLink ? item.title : item.title + ' — no ' + currentTracksPlatform + ' link yet'}">
+                     title="${hasLink ? _esc(item.title) : _esc(item.title) + ' — no ' + currentTracksPlatform + ' link yet'}">
                     <div class="track-cover">
-                        <img src="${imgSrc}" alt="${item.title}"
+                        <img src="${imgSrc}" alt="${_esc(item.title)}"
                              onerror="this.src='${PLACEHOLDER_IMG}'"
                              style="width:100%;height:100%;object-fit:cover;">
                     </div>
-                    <div class="track-title">${item.title}</div>
+                    <div class="track-title">${_esc(item.title)}</div>
+                    ${adminBtns}
                 </div>`;
         });
     }
@@ -2085,12 +2093,21 @@ function tracksAdminAddOpen() {
             <input type="text" id="tracksAddSoundcloud" class="video-admin-input" placeholder="SoundCloud URL">
             <div style="display:flex;gap:6px;margin-top:2px;">
                 <button class="video-admin-btn" id="tracksAddSaveBtn" onclick="tracksAdminSave()">+ Add Album</button>
-                <button class="video-admin-btn" onclick="renderTracksGrid()">Cancel</button>
+                <button class="video-admin-btn" onclick="tracksAdminFormClose()">Cancel</button>
             </div>
             <div class="video-admin-status" id="tracksAddStatus"></div>
         </div>`;
     grid.prepend(form);
+    _bindTracksCoverPreview();
+}
 
+// Remove the open add/edit form and re-render (renderTracksGrid early-returns while a form exists)
+function tracksAdminFormClose() {
+    document.getElementById('tracksAddForm')?.remove();
+    renderTracksGrid();
+}
+
+function _bindTracksCoverPreview() {
     document.getElementById('tracksAddImageFile')?.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -2099,6 +2116,98 @@ function tracksAdminAddOpen() {
         if (preview) { preview.src = URL.createObjectURL(file); preview.style.display = 'block'; }
         if (empty)   empty.style.display = 'none';
     });
+}
+
+function tracksAdminEditOpen(id) {
+    const item = tracksList.find(t => t.id === id);
+    if (!item) return;
+    document.getElementById('tracksAddForm')?.remove();
+    const grid = document.getElementById('tracksGrid');
+    if (!grid) return;
+
+    const hasCover = !!item.image_url;
+    const form = document.createElement('div');
+    form.id = 'tracksAddForm';
+    form.style.cssText = 'background:#d4d0c8;border:2px inset #808080;padding:10px;margin-bottom:15px;';
+    form.innerHTML = `
+        <div class="video-admin-header">✎ Edit Album</div>
+        <div class="video-admin-add">
+            <input type="text" id="tracksAddTitle" class="video-admin-input" placeholder="Album title *" value="${_esc(item.title || '')}">
+            <div style="margin:3px 0;">
+                <div style="font-size:10px;color:#555;margin-bottom:3px;">Album Cover (browse to replace)</div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <img id="tracksAddImgPreview" src="${_esc(item.image_url || '')}" style="width:48px;height:48px;object-fit:cover;border:2px inset #c0c0c0;flex-shrink:0;${hasCover ? '' : 'display:none;'}">
+                    <div id="tracksAddImgEmpty" style="width:48px;height:48px;border:2px inset #c0c0c0;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;${hasCover ? 'display:none;' : ''}">💿</div>
+                    <div>
+                        <label for="tracksAddImageFile" class="video-admin-btn" style="cursor:pointer;display:inline-block;">Browse...</label>
+                        <input type="file" id="tracksAddImageFile" accept="image/*" style="display:none;">
+                    </div>
+                </div>
+            </div>
+            <input type="text" id="tracksAddSpotify"    class="video-admin-input" placeholder="Spotify URL"     value="${_esc(item.spotify_url || '')}">
+            <input type="text" id="tracksAddApple"      class="video-admin-input" placeholder="Apple Music URL" value="${_esc(item.apple_music_url || '')}">
+            <input type="text" id="tracksAddSoundcloud" class="video-admin-input" placeholder="SoundCloud URL"  value="${_esc(item.soundcloud_url || '')}">
+            <div style="display:flex;gap:6px;margin-top:2px;">
+                <button class="video-admin-btn" id="tracksAddSaveBtn" onclick="tracksAdminUpdate('${id}')">💾 Save Changes</button>
+                <button class="video-admin-btn" onclick="tracksAdminFormClose()">Cancel</button>
+            </div>
+            <div class="video-admin-status" id="tracksAddStatus"></div>
+        </div>`;
+    grid.prepend(form);
+    form.scrollIntoView({ block: 'nearest' });
+    _bindTracksCoverPreview();
+}
+
+async function tracksAdminUpdate(id) {
+    const title      = document.getElementById('tracksAddTitle')?.value.trim();
+    const spotify    = document.getElementById('tracksAddSpotify')?.value.trim();
+    const apple      = document.getElementById('tracksAddApple')?.value.trim();
+    const soundcloud = document.getElementById('tracksAddSoundcloud')?.value.trim();
+    const imageFile  = document.getElementById('tracksAddImageFile')?.files?.[0];
+    const statusEl   = document.getElementById('tracksAddStatus');
+    const saveBtn    = document.getElementById('tracksAddSaveBtn');
+
+    if (!title) {
+        if (statusEl) { statusEl.textContent = 'Album title is required.'; statusEl.style.color = '#cc0000'; }
+        return;
+    }
+
+    if (saveBtn) saveBtn.disabled = true;
+    if (statusEl) { statusEl.textContent = 'Saving...'; statusEl.style.color = '#555'; }
+
+    const updates = {
+        title,
+        spotify_url:     spotify     || '',
+        apple_music_url: apple       || '',
+        soundcloud_url:  soundcloud  || ''
+    };
+
+    // New cover chosen — direct upload only, replaces the old one
+    if (imageFile) {
+        if (statusEl) statusEl.textContent = 'Uploading cover...';
+        const ext  = imageFile.name.split('.').pop().toLowerCase();
+        const path = `tracks/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error: uploadErr } = await supabaseClient.storage
+            .from('popup-assets')
+            .upload(path, imageFile, { upsert: true, contentType: imageFile.type });
+        if (uploadErr) {
+            if (saveBtn) saveBtn.disabled = false;
+            if (statusEl) { statusEl.textContent = 'Upload failed: ' + uploadErr.message; statusEl.style.color = '#cc0000'; }
+            return;
+        }
+        updates.image_url = supabaseClient.storage.from('popup-assets').getPublicUrl(path).data.publicUrl;
+        if (statusEl) statusEl.textContent = 'Saving...';
+    }
+
+    const { error } = await supabaseClient.from('tracks').update(updates).eq('id', id);
+    if (saveBtn) saveBtn.disabled = false;
+    if (error) {
+        if (statusEl) { statusEl.textContent = 'Error: ' + error.message; statusEl.style.color = '#cc0000'; }
+        return;
+    }
+
+    document.getElementById('tracksAddForm')?.remove();
+    await loadTracksFromDB();
 }
 
 async function tracksAdminSave() {
@@ -2895,6 +3004,9 @@ window.renderTracksGrid     = renderTracksGrid;
 window.tracksAdminAddOpen   = tracksAdminAddOpen;
 window.tracksAdminSave      = tracksAdminSave;
 window.tracksAdminDelete    = tracksAdminDelete;
+window.tracksAdminEditOpen  = tracksAdminEditOpen;
+window.tracksAdminUpdate    = tracksAdminUpdate;
+window.tracksAdminFormClose = tracksAdminFormClose;
 // Forum tab switching function
 function switchForumTab(tab) {
     const feedView = document.getElementById('feedView');
