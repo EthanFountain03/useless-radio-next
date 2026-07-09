@@ -1025,9 +1025,12 @@ const IMAGE_SIZES = {
 let videosList = [];
 
 // Tracks list — loaded from Supabase `tracks` table; falls back to TRACKS_ITEMS.
-// Each entry: { id, title, image_url, spotify_url, apple_music_url, soundcloud_url, sort_order }
+// Each entry: { id, title, image_url, spotify_url, apple_music_url, soundcloud_url, sort_order, drop_at }
+// drop_at (timestamptz, nullable): tracks with a future drop_at are hidden from
+// non-admins until that time passes; a timer re-renders the grid at drop time.
 let tracksList = [];
 let currentTracksPlatform = 'spotify';
+let tracksDropTimer = null;
 
 const MAIN_VIDEO_ID = '7VxjjCIMK3w';
 
@@ -1999,15 +2002,21 @@ function renderTracksGrid() {
 
     const PLACEHOLDER_IMG = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect fill='%23f0f0f0' width='100' height='100'/%3E%3Ctext x='50' y='55' text-anchor='middle' font-size='10' fill='%23999'%3EAlbum%3C/text%3E%3C/svg%3E";
 
+    // Scheduled drops: hidden from non-admins until drop_at passes; admins see them with a badge
+    const now = Date.now();
+    const isDropped = (item) => !item.drop_at || new Date(item.drop_at).getTime() <= now;
+    const visibleTracks = isAdmin ? tracksList : tracksList.filter(isDropped);
+
     let itemsHTML = '';
 
-    if (tracksList.length === 0 && !isAdmin) {
+    if (visibleTracks.length === 0 && !isAdmin) {
         itemsHTML = `<div style="color:#888;font-size:11px;font-style:italic;text-align:center;padding:20px;grid-column:1/-1;">No tracks yet.</div>`;
     } else {
-        tracksList.forEach(item => {
+        visibleTracks.forEach(item => {
             const url     = item[urlKey] || '';
             const hasLink = !!url;
             const imgSrc  = item.image_url || item.image || PLACEHOLDER_IMG;
+            const pending = !isDropped(item);
 
             // Edit/delete controls for admins — only for real DB rows (fallback items have no id)
             const adminBtns = (isAdmin && item.id) ? `
@@ -2016,9 +2025,14 @@ function renderTracksGrid() {
                     <button class="video-admin-sm-btn danger" onclick="event.stopPropagation();tracksAdminDelete('${item.id}')" title="Remove album">✕</button>
                 </div>` : '';
 
+            const dropBadge = pending ? `
+                <div style="font-size:9px;color:#000080;background:#fff3b0;border:1px solid #c0a000;padding:1px 4px;margin-top:3px;text-align:center;" title="Hidden from visitors until drop time">
+                    ⏰ Drops ${_esc(new Date(item.drop_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }))}
+                </div>` : '';
+
             itemsHTML += `
                 <div class="track-item"
-                     style="cursor:${hasLink ? 'pointer' : 'default'};"
+                     style="cursor:${hasLink ? 'pointer' : 'default'};${pending ? 'opacity:0.55;' : ''}"
                      ${hasLink ? `onclick="window.open('${url}','_blank')"` : ''}
                      title="${hasLink ? _esc(item.title) : _esc(item.title) + ' — no ' + currentTracksPlatform + ' link yet'}">
                     <div class="track-cover">
@@ -2027,6 +2041,7 @@ function renderTracksGrid() {
                              style="width:100%;height:100%;object-fit:cover;">
                     </div>
                     <div class="track-title">${_esc(item.title)}</div>
+                    ${dropBadge}
                     ${adminBtns}
                 </div>`;
         });
@@ -2044,6 +2059,27 @@ function renderTracksGrid() {
     grid.innerHTML = `
         <h4 style="color:#000080;margin:0 0 12px;font-size:12px;">📀 Albums</h4>
         <div class="tracks-grid">${itemsHTML}${addCard}</div>`;
+
+    _scheduleTracksDropRefresh();
+}
+
+// Re-render the grid the moment the next scheduled drop_at passes, so tracks
+// appear for viewers with the window already open — no refresh needed.
+function _scheduleTracksDropRefresh() {
+    if (tracksDropTimer) { clearTimeout(tracksDropTimer); tracksDropTimer = null; }
+
+    const now = Date.now();
+    const futureDrops = tracksList
+        .map(t => t.drop_at ? new Date(t.drop_at).getTime() : 0)
+        .filter(ts => ts > now);
+    if (futureDrops.length === 0) return;
+
+    // +1s past drop time; cap the delay so very far-out dates don't overflow setTimeout
+    const delay = Math.min(Math.min(...futureDrops) - now + 1000, 2147483647);
+    tracksDropTimer = setTimeout(() => {
+        tracksDropTimer = null;
+        if (document.getElementById('tracksGrid')) renderTracksGrid();
+    }, delay);
 }
 
 function tracksAdminAddOpen() {
@@ -2072,6 +2108,10 @@ function tracksAdminAddOpen() {
             <input type="text" id="tracksAddSpotify"    class="video-admin-input" placeholder="Spotify URL">
             <input type="text" id="tracksAddApple"      class="video-admin-input" placeholder="Apple Music URL">
             <input type="text" id="tracksAddSoundcloud" class="video-admin-input" placeholder="SoundCloud URL">
+            <div style="margin:3px 0;">
+                <div style="font-size:10px;color:#555;margin-bottom:3px;">⏰ Drop Date — leave blank to post right away</div>
+                <input type="datetime-local" id="tracksAddDropAt" class="video-admin-input">
+            </div>
             <div style="display:flex;gap:6px;margin-top:2px;">
                 <button class="video-admin-btn" id="tracksAddSaveBtn" onclick="tracksAdminSave()">+ Add Album</button>
                 <button class="video-admin-btn" onclick="tracksAdminFormClose()">Cancel</button>
@@ -2086,6 +2126,23 @@ function tracksAdminAddOpen() {
 function tracksAdminFormClose() {
     document.getElementById('tracksAddForm')?.remove();
     renderTracksGrid();
+}
+
+// ISO timestamp → value for <input type="datetime-local"> in the admin's local time
+function _dropAtToInputValue(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// datetime-local input → ISO timestamp for the drop_at column (null = drop immediately)
+function _readDropAtInput() {
+    const raw = document.getElementById('tracksAddDropAt')?.value;
+    if (!raw) return null;
+    const d = new Date(raw);
+    return isNaN(d.getTime()) ? null : d.toISOString();
 }
 
 function _bindTracksCoverPreview() {
@@ -2128,6 +2185,10 @@ function tracksAdminEditOpen(id) {
             <input type="text" id="tracksAddSpotify"    class="video-admin-input" placeholder="Spotify URL"     value="${_esc(item.spotify_url || '')}">
             <input type="text" id="tracksAddApple"      class="video-admin-input" placeholder="Apple Music URL" value="${_esc(item.apple_music_url || '')}">
             <input type="text" id="tracksAddSoundcloud" class="video-admin-input" placeholder="SoundCloud URL"  value="${_esc(item.soundcloud_url || '')}">
+            <div style="margin:3px 0;">
+                <div style="font-size:10px;color:#555;margin-bottom:3px;">⏰ Drop Date — clear to post right away</div>
+                <input type="datetime-local" id="tracksAddDropAt" class="video-admin-input" value="${_dropAtToInputValue(item.drop_at)}">
+            </div>
             <div style="display:flex;gap:6px;margin-top:2px;">
                 <button class="video-admin-btn" id="tracksAddSaveBtn" onclick="tracksAdminUpdate('${id}')">💾 Save Changes</button>
                 <button class="video-admin-btn" onclick="tracksAdminFormClose()">Cancel</button>
@@ -2160,7 +2221,8 @@ async function tracksAdminUpdate(id) {
         title,
         spotify_url:     spotify     || '',
         apple_music_url: apple       || '',
-        soundcloud_url:  soundcloud  || ''
+        soundcloud_url:  soundcloud  || '',
+        drop_at:         _readDropAtInput()
     };
 
     // New cover chosen — direct upload only, replaces the old one
@@ -2236,7 +2298,8 @@ async function tracksAdminSave() {
         spotify_url:     spotify     || '',
         apple_music_url: apple       || '',
         soundcloud_url:  soundcloud  || '',
-        sort_order:      nextOrder
+        sort_order:      nextOrder,
+        drop_at:         _readDropAtInput()
     });
 
     if (saveBtn) saveBtn.disabled = false;
