@@ -309,7 +309,7 @@ function createWindow(appName) {
             <div id="loungeTwitchEmbed" class="video-display" style="display: none;">
                 <iframe 
                     id="loungeTwitchPlayer"
-                    src="https://player.twitch.tv/?channel=uselessradio&parent=uselessradio.com&parent=www.uselessradio.com&parent=127.0.0.1&parent=localhost&autoplay=false&muted=true"
+                    src="https://player.twitch.tv/?channel=harajukee&parent=uselessradio.com&parent=www.uselessradio.com&parent=127.0.0.1&parent=localhost&autoplay=false&muted=true"
                     class="media-iframe"
                     style="width: 100%; height: 100%; border: none;"
                     allowfullscreen>
@@ -339,7 +339,7 @@ function createWindow(appName) {
                     <button onclick="window.open('https://www.youtube.com/@uselessradio/streams', '_blank')" style="padding: 12px 20px; background: #ff0000; color: white; border: 2px outset #ff0000; cursor: pointer; font-weight: bold; font-size: 12px;">
                         ▶️ YouTube Live
                     </button>
-                    <button onclick="window.open('https://www.twitch.tv/uselessradio', '_blank')" style="padding: 12px 20px; background: #9146ff; color: white; border: 2px outset #9146ff; cursor: pointer; font-weight: bold; font-size: 12px;">
+                    <button onclick="window.open('https://www.twitch.tv/harajukee', '_blank')" style="padding: 12px 20px; background: #9146ff; color: white; border: 2px outset #9146ff; cursor: pointer; font-weight: bold; font-size: 12px;">
                         📺 Twitch
                     </button>
                 </div>
