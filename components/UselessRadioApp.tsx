@@ -226,8 +226,8 @@ export default function UselessRadioApp() {
               <div className="personal-icon" data-app="Jordan-walker" data-tooltip="Jordan Walker">
                 <img src="/z.jordan head.png" alt="Jordan Walker" className="personal-icon-img" />
               </div>
-              <div className="personal-icon" data-app="Hara" data-tooltip="Hara">
-                <img src="/z.hara.png" alt="Hara" className="personal-icon-img" />
+              <div className="personal-icon" data-app="HARA" data-tooltip="HARA">
+                <img src="/z.hara.png" alt="HARA" className="personal-icon-img" />
               </div>
             </div>
             <div className="taskbar-apps" id="taskbarApps"></div>
