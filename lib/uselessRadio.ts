@@ -143,7 +143,7 @@ function openWindow(appName) {
                 let randomWidth, randomHeight;
                 
                 // Personal bio windows get tall and lean format
-                if (['Swampfoot', 'Owen-Givens', 'Mannisupreme', 'Jordan-walker'].includes(appName)) {
+                if (['Swampfoot', 'Owen-Givens', 'Mannisupreme', 'Jordan-walker', 'Hara'].includes(appName)) {
                     randomWidth = Math.floor(Math.random() * 150) + 450; // 450-600px (narrower)
                     randomHeight = Math.floor(Math.random() * 200) + 650; // 650-850px (taller)
                 } else if (appName === 'store') {
@@ -255,7 +255,7 @@ function createWindow(appName) {
     const icons = {
         'Videos': '📹', 'forum': '💬', 'store': '🛒', 'tracks': '💿', 
         'lounge': '🎵', 'contact': '📞', 'about': 'ℹ️',
-        'Swampfoot': '👑', 'Owen-Givens': '🎸', 'Mannisupreme': '🔥', 'Jordan-walker': '🎤'
+        'Swampfoot': '👑', 'Owen-Givens': '🎸', 'Mannisupreme': '🔥', 'Jordan-walker': '🎤', 'Hara': '⭐'
     };
     const icon = icons[appName] || '📁';
     
@@ -722,7 +722,7 @@ function createWindow(appName) {
         // Personal icons and other generic windows
         let personalContent = '';
         
-        if (['Swampfoot', 'Owen-Givens', 'Mannisupreme', 'Jordan-walker'].includes(appName)) {
+        if (['Swampfoot', 'Owen-Givens', 'Mannisupreme', 'Jordan-walker', 'Hara'].includes(appName)) {
             const memberInfo = {
                 'Swampfoot': {
                     role: 'Producer/Musician',
@@ -750,6 +750,13 @@ function createWindow(appName) {
                     bio: 'I hate bios, I\'m going to use this opportunity to plug my other ventures that you can find on cinzanol.xyz!',
                     skills: 'Debate, Ride a bike with no hands, Skribbling',
                     image: 'z.jordan2.png',
+                    imageSize: '400px'
+                },
+                'Hara': {
+                    role: 'FILLER ROLE',
+                    bio: 'FILLER BIO — replace with Hara\'s real bio.',
+                    skills: 'FILLER SKILLS',
+                    image: 'z.hara.png',
                     imageSize: '400px'
                 }
             };
@@ -982,7 +989,8 @@ const WEBSITE_URLS = {
     'Swampfoot': null,
     'Owen-Givens': null,
     'Mannisupreme': null,
-    'Jordan-walker': null
+    'Jordan-walker': null,
+    'Hara': null
 };
 
 // ⚡ ALBUM PROMO POPUP CONFIGURATION ⚡
@@ -1002,21 +1010,24 @@ const IMAGE_SIZES = {
         'Swampfoot': { width: 300, height: 300 },
         'Owen-Givens': { width: 220, height: 220 },
         'Mannisupreme': { width: 250, height: 250 }, // Adjust z.manni2.png size here
-        'Jordan-walker': { width: 225, height: 225 }
+        'Jordan-walker': { width: 225, height: 225 },
+        'Hara': { width: 225, height: 225 }
     },
     // Taskbar icon sizes (width x height in pixels)
     taskbar: {
         'Swampfoot': { width: 36, height: 36 }, // Desktop size
         'Owen-Givens': { width: 36, height: 36 }, // Desktop size
         'Mannisupreme': { width: 36, height: 36 }, // Desktop size
-        'Jordan-walker': { width: 36, height: 36 } // Desktop size (perfect reference)
+        'Jordan-walker': { width: 36, height: 36 }, // Desktop size (perfect reference)
+        'Hara': { width: 36, height: 36 } // Desktop size
     },
     // Mobile taskbar icon sizes
     taskbarMobile: {
         'Swampfoot': { width: 44, height: 44 }, // Mobile size
         'Owen-Givens': { width: 44, height: 44 }, // Mobile size
         'Mannisupreme': { width: 44, height: 44 }, // Mobile size
-        'Jordan-walker': { width: 44, height: 44 } // Mobile size
+        'Jordan-walker': { width: 44, height: 44 }, // Mobile size
+        'Hara': { width: 44, height: 44 } // Mobile size
     }
 };
 
